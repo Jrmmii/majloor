@@ -1,429 +1,671 @@
-import requests
+from colorama import *
+from datetime import datetime, timedelta
+from fake_useragent import FakeUserAgent
+from faker import Faker
+import aiohttp
+import asyncio
 import json
-from colorama import init, Fore, Style
-import time
-import datetime
-import random
-init(autoreset=True)
+import os
+import re
+import sys
 
-# Define color variables
-RED = Fore.RED + Style.BRIGHT
-GREEN = Fore.GREEN + Style.BRIGHT
-YELLOW = Fore.YELLOW + Style.BRIGHT
-BLUE = Fore.BLUE + Style.BRIGHT
-MAGENTA = Fore.MAGENTA + Style.BRIGHT
-CYAN = Fore.CYAN + Style.BRIGHT
-WHITE = Fore.WHITE + Style.BRIGHT
- 
+class Major:
+    def __init__(self) -> None:
+        self.faker = Faker()
+        self.headers = {
+            'Accept': 'application/json, text/plain, */*',
+            'Accept-Encoding': 'gzip, deflate, br',
+            'Accept-Language': 'en-GB,en-US;q=0.9,en;q=0.8',
+            'Cache-Control': 'no-cache',
+            'Host': 'major.bot',
+            'Origin': 'https://major.bot',
+            'Pragma': 'no-cache',
+            'Priority': 'u=3, i',
+            'Sec-Fetch-Dest': 'empty',
+            'Sec-Fetch-Mode': 'cors',
+            'Sec-Fetch-Site': 'same-origin',
+            'User-Agent': FakeUserAgent().random
+        }
 
-def get_headers(access_token=None):
-    headers = {
-        "accept": "application/json, text/plain, */*",
-        "accept-language": "en-US,en;q=0.9",
-        "cache-control": "no-cache",
-        "pragma": "no-cache",
-        "priority": "u=1, i",
-        "sec-ch-ua": '"Chromium";v="128", "Not;A=Brand";v="24", "Microsoft Edge";v="128", "Microsoft Edge WebView2";v="128"',
-        "sec-ch-ua-mobile": "?0",
-        "sec-ch-ua-platform": '"Windows"',
-        "sec-fetch-dest": "empty",
-        "sec-fetch-mode": "cors",
-        "sec-fetch-site": "same-origin",
-        "Referer": "https://major.glados.app/",
-        "Referrer-Policy": "strict-origin-when-cross-origin"
-    }
-    if access_token:
-        headers["authorization"] = f"Bearer {access_token}"
-    return headers
+    def clear_terminal(self):
+        os.system('cls' if os.name == 'nt' else 'clear')
 
-def auth(init_data, retries=3, delay=2):
-    url = "https://major.glados.app/api/auth/tg/"
-    headers = get_headers()
-    body = {
-        "init_data": init_data
-    }
-    
-    for attempt in range(retries):
-        try:
-            response = requests.post(url, headers=headers, data=json.dumps(body))
-            response.raise_for_status()
-            response_json = response.json()
-            if response.status_code == 200:
-                return response_json
-            else:
-                print(f"{RED}Error: QUERY INVALID / MATI", flush=True)
-                return None
-        except (requests.RequestException, ValueError) as e:
-            print(f"{RED}Error getting token: {e}", flush=True)
-            if attempt < retries - 1:
-                print(f"{YELLOW}Retrying... ({attempt + 1}/{retries})", end="\r", flush=True)
-                time.sleep(delay)
-            else:
-                return None
+    def print_timestamp(self, message):
+        print(
+            f"{Fore.BLUE + Style.BRIGHT}[ {datetime.now().astimezone().strftime('%x %X %Z')} ]{Style.RESET_ALL}"
+            f"{Fore.WHITE + Style.BRIGHT} | {Style.RESET_ALL}"
+            f"{message}",
+            flush=True
+        )
 
-def user_detail(access_token, user_id,retries=3,delay=2):
-    url = f"https://major.glados.app/api/users/{user_id}/"
-    headers = get_headers(access_token)
-    
-    for attempt in range(retries):
-        try:
-            response = requests.get(url, headers=headers)
-            response.raise_for_status()
-            response_json = response.json()
-            if response.status_code == 200:
-                return response_json
-            else:
-                print(f"{RED}[ Balance ] : Error: Gagal mendapatkan balance", flush=True)
-                return None
-        except (requests.RequestException, ValueError) as e:
-            if attempt < retries - 1:
-                print(f"{YELLOW}[ Balance] : Error Retrying... ({attempt + 1}/{retries})", end="\r", flush=True)
-                time.sleep(delay)
-            else:
-                return None
-    
-def daily_login(access_token,retries=3,delay=2):
-    url = f"https://major.glados.app/api/user-visits/streak/"
-    headers = get_headers(access_token)
-    for attempt in range(retries):
-        try:
-            response = requests.get(url, headers=headers)
-            response.raise_for_status()
-            response_json = response.json()
-            if response.status_code == 200:
-                return response_json
-            else:
-                print(f"{RED}[ Daily Streak ] : Error: Gagal mendapatkan data", flush=True)
-                return None
-        except (requests.RequestException, ValueError) as e:
-            if attempt < retries - 1:
-                print(f"{RED}[ Daily Streak ] : Error Retrying... ({attempt + 1}/{retries})", end="\r", flush=True)
-                time.sleep(delay)
-            else:
-                return None
-     
-def spin(access_token, retries=3, delay=2):
-    url = f"https://major.glados.app/api/roulette"
-    headers = get_headers(access_token)
-    
-    for attempt in range(retries):
-        try:
-            response = requests.post(url, headers=headers)
-            response_json = response.json()  # Parse JSON response before raising for status
-            if response.status_code == 201:
-                return response_json, response.status_code
-            elif response.status_code == 400:
-                return response_json, response.status_code
-            else:
-                print(f"{RED}[ Spin ] : Error: Gagal mendapatkan data", flush=True)
-                return None, None
-        except (requests.RequestException, ValueError) as e:
-            # print(f"{RED}Error spin: {e}", flush=True)
-            if attempt < retries - 1:
-                print(f"{RED}[ Spin ] : Error Retrying... ({attempt + 1}/{retries})", end="\r", flush=True)
-                time.sleep(delay)
-            else:
-                return None, None
+    def load_queries(self, file_path):
+        with open(file_path, 'r') as file:
+            return [line.strip() for line in file if line.strip()]
 
-def check_in(access_token, retries=3, delay=2):
-    url = f"https://major.glados.app/api/user-visits/visit/"
-    headers = get_headers(access_token)
-    for attempt in range(retries):
-        try:
-            response = requests.post(url, headers=headers)
-            response_json = response.json()  # Parse JSON response before raising for status
-            if response.status_code == 200:
-                return response_json
-            elif response.status_code == 400:
-                return response_json
-            else:
-                print(f"{RED}[ Check-in ] : Error: Gagal mendapatkan data", flush=True)
-                return None
-        except (requests.RequestException, ValueError) as e:
-            # print(f"{RED}Error spin: {e}", flush=True)
-            if attempt < retries - 1:
-                print(f"{RED}[ Check-in ] : Error Retrying... ({attempt + 1}/{retries})", end="\r", flush=True)
-                time.sleep(delay)
-            else:
-                return None
-    
-def hold_ghalibie(access_token,coins,retries=3,delay=2):
-    url = f"https://major.glados.app/api/bonuses/coins/"
-    headers = get_headers(access_token)
-    body = {
-        "coins": coins 
-    }
-    for attempt in range(retries):
-        try:
-            response = requests.post(url, headers=headers, data=json.dumps(body))
-            response_json = response.json()  # Parse JSON response before raising for status
-            if response.status_code == 201:
-                return response_json, response.status_code
-            elif response.status_code == 400:
-                return response_json, response.status_code
-            else:
-                print(f"{RED}[ Hold ] Error: Gagal mendapatkan data", flush=True)
-                return None, None
-        except (requests.RequestException, ValueError) as e:
-            print(f"{RED}[ Hold ] Error hold: {e}", flush=True)
-            if attempt < retries - 1:
-                print(f"{RED}[ Hold ] : Retrying... ({attempt + 1}/{retries})", end="\r", flush=True)
-                time.sleep(delay)
-            else:
-                return None, None
-    
-def get_tasks(access_token, is_daily,retries=3,delay=2):
-    url = f"https://major.glados.app/api/tasks/?is_daily={str(is_daily).lower()}"
-    headers = get_headers(access_token)
-    for attempt in range(retries):
-        try:
-            response = requests.get(url, headers=headers)
-            response.raise_for_status()
-            response_json = response.json()
-            if response.status_code == 200:
-                return response_json
-            else:
-                print(f"{RED}[ Task ] : Error: Gagal mendapatkan data", flush=True)
-                return None
-        except (requests.RequestException, ValueError) as e:
-            # print(f"{RED}[ Task ] : Error daily_login: {e}", flush=True)
-            if attempt < retries - 1:
-                print(f"{RED}[ Task ] : Error  Retrying... ({attempt + 1}/{retries})", end="\r", flush=True)
-                time.sleep(delay)
-            else:
-                return None
-        
-   
-def process_task(access_token, task_id,retries=3,delay=2):
-    url = "https://major.glados.app/api/tasks/"
-    headers = get_headers(access_token)
-    body = json.dumps({"task_id": task_id})
-    for attempt in range(retries):
-        try:
-            response = requests.post(url, headers=headers, data=body)
-            response_json = response.json()  # Parse JSON response before raising for status
-            if response.status_code == 201:
-                return response_json, response.status_code
-            elif response.status_code == 400:
-        
-                return response_json, response.status_code
-            else:
-                print(f"{RED}[ Clear Task ] : Error: Gagal mendapatkan data", flush=True)
-                return None, None
-        except (requests.RequestException, ValueError) as e:
-            print(f"{RED}[ Clear Task ] Error : {e}", flush=True)
-            if attempt < retries - 1:
-                print(f"{RED}[ Clear Task ] : Retrying... ({attempt + 1}/{retries})",end="\r",  flush=True)
-                time.sleep(delay)
-            else:
-                return None, None
- 
-def print_welcome_message():
-    print(Fore.WHITE + r"""
-          
-🆂🅸🆁🅺🅴🅻
-          
-█▀▀ █▀▀ █▄░█ █▀▀ █▀█ █▀█ █░█ █▀
-█▄█ ██▄ █░▀█ ██▄ █▀▄ █▄█ █▄█ ▄█
-          """)
-    print(Fore.GREEN + Style.BRIGHT + "Major BOT")
-    print(Fore.YELLOW + Style.BRIGHT + "Free Konsultasi Join Telegram Channel: https://t.me/ghalibie")
-    print(Fore.BLUE + Style.BRIGHT + "Buy me a coffee :) 0823 2367 3487 GOPAY / DANA")
-    print(Fore.RED + Style.BRIGHT + "NOT FOR SALE ! Ngotak dikit bang. Ngoding susah2 kau tinggal rename :)\n")      
+    def process_queries(self, lines_per_file: int):
+        if not os.path.exists('queries.txt'):
+            raise FileNotFoundError(f"File 'queries.txt' not found. Please ensure it exists.")
 
-def main():
-    print_welcome_message()
-    mode = input(Fore.YELLOW + f"Check All Balance Only? (y/n): ").strip().upper()
-    if mode != 'Y':
-        print(Fore.YELLOW + f"Select Hold Coin Mode: ")
-        print(Fore.GREEN + Style.BRIGHT + f"1. Max Coin (915 Coin)")
-        print(Fore.CYAN + Style.BRIGHT + f"2. Random 700-800 Coin")
-        print(Fore.MAGENTA + Style.BRIGHT + f"3. Random 800-915 Coin")
+        with open('queries.txt', 'r') as f:
+            queries = [line.strip() for line in f if line.strip()]
+        if not queries:
+            raise ValueError("File 'queries.txt' is empty.")
+
+        existing_queries = set()
+        for file in os.listdir():
+            if file.startswith('queries-') and file.endswith('.txt'):
+                with open(file, 'r') as qf:
+                    existing_queries.update(line.strip() for line in qf if line.strip())
+
+        new_queries = [query for query in queries if query not in existing_queries]
+        if not new_queries:
+            self.print_timestamp(f"{Fore.YELLOW + Style.BRIGHT}[ No New Queries To Add ]{Style.RESET_ALL}")
+            return
+
+        files = [f for f in os.listdir() if f.startswith('queries-') and f.endswith('.txt')]
+        files.sort(key=lambda x: int(re.findall(r'\d+', x)[0]) if re.findall(r'\d+', x) else 0)
+
+        last_file_number = int(re.findall(r'\d+', files[-1])[0]) if files else 0
+
+        for i in range(0, len(new_queries), lines_per_file):
+            chunk = new_queries[i:i + lines_per_file]
+            if files and len(open(files[-1], 'r').readlines()) < lines_per_file:
+                with open(files[-1], 'a') as outfile:
+                    outfile.write('\n'.join(chunk) + '\n')
+                self.print_timestamp(f"{Fore.GREEN + Style.BRIGHT}[ Updated '{files[-1]}' ]{Style.RESET_ALL}")
+            else:
+                last_file_number += 1
+                queries_file = f"queries-{last_file_number}.txt"
+                with open(queries_file, 'w') as outfile:
+                    outfile.write('\n'.join(chunk) + '\n')
+                self.print_timestamp(f"{Fore.GREEN + Style.BRIGHT}[ Generated '{queries_file}' ]{Style.RESET_ALL}")
+
+    async def tg_auth(self, queries: str):
+        url = 'https://major.bot/api/auth/tg/'
+        accounts = []
+        for query in queries:
+            data = json.dumps({'init_data':query})
+            headers = {
+                **self.headers,
+                'Content-Length': str(len(data)),
+                'Content-Type': 'application/json'
+            }
+            try:
+                async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=20)) as session:
+                    async with session.post(url, headers=headers, data=data) as response:
+                        response.raise_for_status()
+                        tg_auth = await response.json()
+                        token = f"Bearer {tg_auth['access_token']}"
+                        id = tg_auth['user']['id']
+                        first_name = tg_auth['user']['first_name'] or self.faker.first_name()
+                        accounts.append({'first_name': first_name, 'id': id, 'token': token})
+            except (aiohttp.ClientResponseError, aiohttp.ContentTypeError, Exception) as e:
+                self.print_timestamp(
+                    f"{Fore.YELLOW + Style.BRIGHT}[ Failed To Process {query} ]{Style.RESET_ALL}"
+                    f"{Fore.WHITE + Style.BRIGHT} | {Style.RESET_ALL}"
+                    f"{Fore.RED + Style.BRIGHT}[ {str(e)} ]{Style.RESET_ALL}"
+                )
+                continue
+        return accounts
+
+    async def visit(self, token: str, first_name: str):
+        url = 'https://major.bot/api/user-visits/visit/'
+        headers = {
+            **self.headers,
+            'Authorization': token,
+            'Content-Length': '0',
+            'Content-Type': 'application/json'
+        }
+        try:
+            async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=20)) as session:
+                async with session.post(url=url, headers=headers) as response:
+                    if response.status in [500, 520]:
+                        self.print_timestamp(
+                            f"{Fore.CYAN + Style.BRIGHT}[ {first_name} ]{Style.RESET_ALL}"
+                            f"{Fore.WHITE + Style.BRIGHT} | {Style.RESET_ALL}"
+                            f"{Fore.YELLOW + Style.BRIGHT}[ Server Major Down ]{Style.RESET_ALL}"
+                        )
+                        return None
+                    response.raise_for_status()
+                    visit = await response.json()
+                    if visit['is_increased']:
+                        if visit['is_allowed']:
+                            return self.print_timestamp(
+                                f"{Fore.CYAN + Style.BRIGHT}[ {first_name} ]{Style.RESET_ALL}"
+                                f"{Fore.WHITE + Style.BRIGHT} | {Style.RESET_ALL}"
+                                f"{Fore.GREEN + Style.BRIGHT}[ Claimed Daily Visit ]{Style.RESET_ALL}"
+                            )
+                        else:
+                            return self.print_timestamp(
+                                f"{Fore.CYAN + Style.BRIGHT}[ {first_name} ]{Style.RESET_ALL}"
+                                f"{Fore.WHITE + Style.BRIGHT} | {Style.RESET_ALL}"
+                                f"{Fore.YELLOW + Style.BRIGHT}[ Subscribe Major Community To Claim Your Daily Visit Bonus And Increase Your Streak ]{Style.RESET_ALL}"
+                            )
+                    else:
+                        return self.print_timestamp(
+                            f"{Fore.CYAN + Style.BRIGHT}[ {first_name} ]{Style.RESET_ALL}"
+                            f"{Fore.WHITE + Style.BRIGHT} | {Style.RESET_ALL}"
+                            f"{Fore.MAGENTA + Style.BRIGHT}[ Daily Visit Already Claimed ]{Style.RESET_ALL}"
+                        )
+        except aiohttp.ClientResponseError as e:
+            return self.print_timestamp(f"{Fore.RED + Style.BRIGHT}[ {first_name} An HTTP Error Occurred While Fetching Streak: {str(e.message)} ]{Style.RESET_ALL}")
+        except (Exception, aiohttp.ContentTypeError) as e:
+            return self.print_timestamp(f"{Fore.RED + Style.BRIGHT}[ {first_name} An Unexpected Error Occurred While Daily Visit: {str(e)} ]{Style.RESET_ALL}")
+
+    async def streak(self, token: str, first_name: str):
+        url = 'https://major.bot/api/user-visits/streak/'
+        headers = {
+            **self.headers,
+            'Authorization': token
+        }
+        try:
+            async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=20)) as session:
+                async with session.get(url=url, headers=headers) as response:
+                    if response.status in [500, 520]:
+                        self.print_timestamp(
+                            f"{Fore.CYAN + Style.BRIGHT}[ {first_name} ]{Style.RESET_ALL}"
+                            f"{Fore.WHITE + Style.BRIGHT} | {Style.RESET_ALL}"
+                            f"{Fore.YELLOW + Style.BRIGHT}[ Server Major Down ]{Style.RESET_ALL}"
+                        )
+                        return None
+                    response.raise_for_status()
+                    return await response.json()
+        except aiohttp.ClientResponseError as e:
+            self.print_timestamp(f"{Fore.RED + Style.BRIGHT}[ {first_name} An HTTP Error Occurred While Fetching Streak: {str(e.message)} ]{Style.RESET_ALL}")
+            return None
+        except (Exception, aiohttp.ContentTypeError) as e:
+            self.print_timestamp(f"{Fore.RED + Style.BRIGHT}[ {first_name} An Unexpected Error Occurred While Fetching Streak: {str(e)} ]{Style.RESET_ALL}")
+            return None
+
+    async def user(self, token: str, id: str, first_name: str):
+        url = f'https://major.bot/api/users/{id}/'
+        headers = {
+            **self.headers,
+            'Authorization': token
+        }
+        try:
+            async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=20)) as session:
+                async with session.get(url=url, headers=headers) as response:
+                    if response.status in [500, 520]:
+                        self.print_timestamp(
+                            f"{Fore.CYAN + Style.BRIGHT}[ {first_name} ]{Style.RESET_ALL}"
+                            f"{Fore.WHITE + Style.BRIGHT} | {Style.RESET_ALL}"
+                            f"{Fore.YELLOW + Style.BRIGHT}[ Server Major Down ]{Style.RESET_ALL}"
+                        )
+                        return None
+                    response.raise_for_status()
+                    return await response.json()
+        except aiohttp.ClientResponseError as e:
+            self.print_timestamp(f"{Fore.RED + Style.BRIGHT}[ {first_name} An HTTP Error Occurred While Fetching User: {str(e.message)} ]{Style.RESET_ALL}")
+            return None
+        except (Exception, aiohttp.ContentTypeError) as e:
+            self.print_timestamp(f"{Fore.RED + Style.BRIGHT}[ {first_name} An Unexpected Error Occurred While Fetching User: {str(e)} ]{Style.RESET_ALL}")
+            return None
+
+    async def squad(self, token: str, squad_id: int, first_name: str):
+        url = f'https://major.bot/api/squads/{squad_id}'
+        headers = {
+            **self.headers,
+            'Authorization': token
+        }
+        try:
+            async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=20)) as session:
+                async with session.get(url=url, headers=headers) as response:
+                    if response.status in [500, 520]:
+                        self.print_timestamp(
+                            f"{Fore.CYAN + Style.BRIGHT}[ {first_name} ]{Style.RESET_ALL}"
+                            f"{Fore.WHITE + Style.BRIGHT} | {Style.RESET_ALL}"
+                            f"{Fore.YELLOW + Style.BRIGHT}[ Server Major Down ]{Style.RESET_ALL}"
+                        )
+                        return None
+                    response.raise_for_status()
+                    squad = await response.json()
+                    return self.print_timestamp(
+                        f"{Fore.CYAN + Style.BRIGHT}[ {first_name} ]{Style.RESET_ALL}"
+                        f"{Fore.WHITE + Style.BRIGHT} | {Style.RESET_ALL}"
+                        f"{Fore.GREEN + Style.BRIGHT}[ Squad {squad['name']} ]{Style.RESET_ALL}"
+                        f"{Fore.WHITE + Style.BRIGHT} | {Style.RESET_ALL}"
+                        f"{Fore.BLUE + Style.BRIGHT}[ Squad Rating {squad['rating']} ]{Style.RESET_ALL}"
+                    )
+        except aiohttp.ClientResponseError as e:
+            return self.print_timestamp(f"{Fore.RED + Style.BRIGHT}[ {first_name} An HTTP Error Occurred While Fetching Squad: {str(e.message)} ]{Style.RESET_ALL}")
+        except (Exception, aiohttp.ContentTypeError) as e:
+            return self.print_timestamp(f"{Fore.RED + Style.BRIGHT}[ {first_name} An Unexpected Error Occurred While Fetching Squad: {str(e)} ]{Style.RESET_ALL}")
+
+    async def join_squad(self, token: str, first_name: str):
+        url = f'https://major.bot/api/squads/2220048265/join/'
+        headers = {
+            **self.headers,
+            'Authorization': token,
+            'Content-Length': '0'
+        }
+        try:
+            async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=20)) as session:
+                async with session.post(url=url, headers=headers) as response:
+                    if response.status in [500, 520]:
+                        self.print_timestamp(
+                            f"{Fore.CYAN + Style.BRIGHT}[ {first_name} ]{Style.RESET_ALL}"
+                            f"{Fore.WHITE + Style.BRIGHT} | {Style.RESET_ALL}"
+                            f"{Fore.YELLOW + Style.BRIGHT}[ Server Major Down ]{Style.RESET_ALL}"
+                        )
+                        return None
+                    response.raise_for_status()
+                    join_squad = await response.json()
+                    if join_squad['status'] == 'ok':
+                        return await self.squad(token=token, squad_id=2220048265, first_name=first_name)
+        except aiohttp.ClientResponseError as e:
+            return self.print_timestamp(f"{Fore.RED + Style.BRIGHT}[ {first_name} An HTTP Error Occurred While Join Squad: {str(e.message)} ]{Style.RESET_ALL}")
+        except (Exception, aiohttp.ContentTypeError) as e:
+            return self.print_timestamp(f"{Fore.RED + Style.BRIGHT}[ {first_name} An Unexpected Error Occurred While Join Squad: {str(e)} ]{Style.RESET_ALL}")
+
+    async def leave_squad(self, token: str, first_name: str):
+        url = f'https://major.bot/api/squads/leave/'
+        headers = {
+            **self.headers,
+            'Authorization': token,
+            'Content-Length': '0'
+        }
+        try:
+            async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=20)) as session:
+                async with session.post(url=url, headers=headers) as response:
+                    if response.status in [500, 520]:
+                        self.print_timestamp(
+                            f"{Fore.CYAN + Style.BRIGHT}[ {first_name} ]{Style.RESET_ALL}"
+                            f"{Fore.WHITE + Style.BRIGHT} | {Style.RESET_ALL}"
+                            f"{Fore.YELLOW + Style.BRIGHT}[ Server Major Down ]{Style.RESET_ALL}"
+                        )
+                        return None
+                    response.raise_for_status()
+                    leave_squad = await response.json()
+                    if leave_squad['status'] == 'ok':
+                        return await self.join_squad(token=token, first_name=first_name)
+        except aiohttp.ClientResponseError as e:
+            return self.print_timestamp(f"{Fore.RED + Style.BRIGHT}[ {first_name} An HTTP Error Occurred While Leave Squad: {str(e.message)} ]{Style.RESET_ALL}")
+        except (Exception, aiohttp.ContentTypeError) as e:
+            return self.print_timestamp(f"{Fore.RED + Style.BRIGHT}[ {first_name} An Unexpected Error Occurred While Leave Squad: {str(e)} ]{Style.RESET_ALL}")
+
+    async def tasks(self, token: str, type: str, first_name: str):
+        url = f'https://major.bot/api/tasks/?is_daily={type}'
+        headers = {
+            **self.headers,
+            'Authorization': token
+        }
+        try:
+            async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=20)) as session:
+                async with session.get(url=url, headers=headers) as response:
+                    if response.status in [500, 520]:
+                        self.print_timestamp(
+                            f"{Fore.CYAN + Style.BRIGHT}[ {first_name} ]{Style.RESET_ALL}"
+                            f"{Fore.WHITE + Style.BRIGHT} | {Style.RESET_ALL}"
+                            f"{Fore.YELLOW + Style.BRIGHT}[ Server Major Down ]{Style.RESET_ALL}"
+                        )
+                        return None
+                    response.raise_for_status()
+                    return await response.json()
+        except aiohttp.ClientResponseError as e:
+            self.print_timestamp(f"{Fore.RED + Style.BRIGHT}[ {first_name} An HTTP Error Occurred While Fetching Tasks: {str(e.message)} ]{Style.RESET_ALL}")
+            return None
+        except (Exception, aiohttp.ContentTypeError) as e:
+            self.print_timestamp(f"{Fore.RED + Style.BRIGHT}[ {first_name} An Unexpected Error Occurred While Fetching Tasks: {str(e)} ]{Style.RESET_ALL}")
+            return None
+
+    async def complete_task(self, token: str, first_name: str, task_id: int, task_title: str, task_award: int):
+        url = 'https://major.bot/api/tasks/'
+        data = json.dumps({'task_id':task_id})
+        headers = {
+            **self.headers,
+            'Authorization': token,
+            'Content-Length': str(len(data)),
+            'Content-Type': 'application/json'
+        }
+        try:
+            async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=20)) as session:
+                async with session.post(url=url, headers=headers, data=data) as response:
+                    if response.status in [500, 520]:
+                        return self.print_timestamp(
+                            f"{Fore.CYAN + Style.BRIGHT}[ {first_name} ]{Style.RESET_ALL}"
+                            f"{Fore.WHITE + Style.BRIGHT} | {Style.RESET_ALL}"
+                            f"{Fore.YELLOW + Style.BRIGHT}[ Server Major Down ]{Style.RESET_ALL}"
+                        )
+                    response.raise_for_status()
+                    complete_task = await response.json()
+                    if complete_task['is_completed']:
+                        return self.print_timestamp(
+                            f"{Fore.CYAN + Style.BRIGHT}[ {first_name} ]{Style.RESET_ALL}"
+                            f"{Fore.WHITE + Style.BRIGHT} | {Style.RESET_ALL}"
+                            f"{Fore.GREEN + Style.BRIGHT}[ Got {task_award} From {task_title} ]{Style.RESET_ALL}"
+                        )
+        except aiohttp.ClientResponseError as e:
+            return self.print_timestamp(f"{Fore.RED + Style.BRIGHT}[ {first_name} An HTTP Error Occurred While Complete Tasks: {str(e.message)} ]{Style.RESET_ALL}")
+        except (Exception, aiohttp.ContentTypeError) as e:
+            return self.print_timestamp(f"{Fore.RED + Style.BRIGHT}[ {first_name} An Unexpected Error Occurred While Complete Tasks: {str(e)} ]{Style.RESET_ALL}")
+
+    async def get_choices_durov(self):
+        url = 'https://raw.githubusercontent.com/GravelFire/TWFqb3JCb3RQdXp6bGVEdXJvdg/master/answer.py'
+        try:
+            async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=20)) as session:
+                async with session.get(url=url) as response:
+                    response.raise_for_status()
+                    response_answer = json.loads(await response.text())
+                    return response_answer.get('answer')
+        except (aiohttp.ContentTypeError, aiohttp.ClientResponseError) as e:
+            self.print_timestamp(f"{Fore.RED + Style.BRIGHT}[ An HTTP Error Occurred While Get Choices Durov: {str(e)} ]{Style.RESET_ALL}")
+            return None
+        except Exception as e:
+            self.print_timestamp(f"{Fore.RED + Style.BRIGHT}[ An Unexpected Error Occurred While Get Choices Durov: {str(e)} ]{Style.RESET_ALL}")
+            return None
+
+    async def durov(self, token: str, first_name: str):
+        url = 'https://major.bot/api/durov/'
+        data = json.dumps(await self.get_choices_durov())
+        headers = {
+            **self.headers,
+            'Authorization': token,
+            'Content-Length': str(len(data)),
+            'Content-Type': 'application/json'
+        }
+        try:
+            async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=20)) as session:
+                async with session.post(url=url, headers=headers, data=data) as response:
+                    if response.status == 400:
+                        error_coins = await response.json()
+                        if 'detail' in error_coins:
+                            if 'blocked_until' in error_coins['detail']:
+                                end_time = datetime.fromtimestamp(error_coins['detail']['blocked_until']).astimezone()
+                                formatted_end_time = end_time.strftime('%x %X %Z')
+                                return self.print_timestamp(
+                                    f"{Fore.CYAN + Style.BRIGHT}[ {first_name} ]{Style.RESET_ALL}"
+                                    f"{Fore.WHITE + Style.BRIGHT} | {Style.RESET_ALL}"
+                                    f"{Fore.YELLOW + Style.BRIGHT}[ Can Play Puzzle Durov At {formatted_end_time} ]{Style.RESET_ALL}"
+                                )
+                    elif response.status in [500, 520]:
+                        return self.print_timestamp(
+                            f"{Fore.CYAN + Style.BRIGHT}[ {first_name} ]{Style.RESET_ALL}"
+                            f"{Fore.WHITE + Style.BRIGHT} | {Style.RESET_ALL}"
+                            f"{Fore.YELLOW + Style.BRIGHT}[ Server Major Down ]{Style.RESET_ALL}"
+                        )
+                    response.raise_for_status()
+                    return self.print_timestamp(
+                        f"{Fore.CYAN + Style.BRIGHT}[ {first_name} ]{Style.RESET_ALL}"
+                        f"{Fore.WHITE + Style.BRIGHT} | {Style.RESET_ALL}"
+                        f"{Fore.GREEN + Style.BRIGHT}[ Got 5000 From Puzzle Durov ]{Style.RESET_ALL}"
+                    )
+        except aiohttp.ClientResponseError as e:
+            return self.print_timestamp(f"{Fore.RED + Style.BRIGHT}[ {first_name} An HTTP Error Occurred While Play Durov: {str(e.message)} ]{Style.RESET_ALL}")
+        except (Exception, aiohttp.ContentTypeError) as e:
+            return self.print_timestamp(f"{Fore.RED + Style.BRIGHT}[ {first_name} An Unexpected Error Occurred While Durov: {str(e)} ]{Style.RESET_ALL}")
+
+    async def coins(self, token: str, first_name: str, reward_coins: int):
+        url = 'https://major.bot/api/bonuses/coins/'
+        data = json.dumps({'coins':reward_coins})
+        headers = {
+            **self.headers,
+            'Authorization': token,
+            'Content-Length': str(len(data)),
+            'Content-Type': 'application/json'
+        }
+        try:
+            async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=20)) as session:
+                async with session.post(url=url, headers=headers, data=data) as response:
+                    if response.status == 400:
+                        error_coins = await response.json()
+                        if 'detail' in error_coins:
+                            if 'blocked_until' in error_coins['detail']:
+                                end_time = datetime.fromtimestamp(error_coins['detail']['blocked_until']).astimezone()
+                                formatted_end_time = end_time.strftime('%x %X %Z')
+                                return self.print_timestamp(
+                                    f"{Fore.CYAN + Style.BRIGHT}[ {first_name} ]{Style.RESET_ALL}"
+                                    f"{Fore.WHITE + Style.BRIGHT} | {Style.RESET_ALL}"
+                                    f"{Fore.YELLOW + Style.BRIGHT}[ Can Play Hold Coin At {formatted_end_time} ]{Style.RESET_ALL}"
+                                )
+                    elif response.status in [500, 520]:
+                        return self.print_timestamp(
+                            f"{Fore.CYAN + Style.BRIGHT}[ {first_name} ]{Style.RESET_ALL}"
+                            f"{Fore.WHITE + Style.BRIGHT} | {Style.RESET_ALL}"
+                            f"{Fore.YELLOW + Style.BRIGHT}[ Server Major Down ]{Style.RESET_ALL}"
+                        )
+                    response.raise_for_status()
+                    coins = await response.json()
+                    if coins['success']:
+                        return self.print_timestamp(
+                            f"{Fore.CYAN + Style.BRIGHT}[ {first_name} ]{Style.RESET_ALL}"
+                            f"{Fore.WHITE + Style.BRIGHT} | {Style.RESET_ALL}"
+                            f"{Fore.GREEN + Style.BRIGHT}[ Got {reward_coins} From Hold Coin ]{Style.RESET_ALL}"
+                        )
+        except aiohttp.ClientResponseError as e:
+            return self.print_timestamp(f"{Fore.RED + Style.BRIGHT}[ {first_name} An HTTP Error Occurred While Play Hold Coins: {str(e.message)} ]{Style.RESET_ALL}")
+        except (Exception, aiohttp.ContentTypeError) as e:
+            return self.print_timestamp(f"{Fore.RED + Style.BRIGHT}[ {first_name} An Unexpected Error Occurred While Play Hold Coins: {str(e)} ]{Style.RESET_ALL}")
+
+    async def roulette(self, token: str, first_name: str):
+        url = 'https://major.bot/api/roulette/'
+        headers = {
+            **self.headers,
+            'Authorization': token,
+            'Content-Length': '0',
+            'Content-Type': 'application/json'
+        }
+        try:
+            async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=20)) as session:
+                async with session.post(url=url, headers=headers) as response:
+                    if response.status == 400:
+                        error_coins = await response.json()
+                        if 'detail' in error_coins:
+                            if 'blocked_until' in error_coins['detail']:
+                                end_time = datetime.fromtimestamp(error_coins['detail']['blocked_until']).astimezone()
+                                formatted_end_time = end_time.strftime('%x %X %Z')
+                                return self.print_timestamp(
+                                    f"{Fore.CYAN + Style.BRIGHT}[ {first_name} ]{Style.RESET_ALL}"
+                                    f"{Fore.WHITE + Style.BRIGHT} | {Style.RESET_ALL}"
+                                    f"{Fore.YELLOW + Style.BRIGHT}[ Can Play Roulette At {formatted_end_time} ]{Style.RESET_ALL}"
+                                )
+                    elif response.status in [500, 520]:
+                        return self.print_timestamp(
+                            f"{Fore.CYAN + Style.BRIGHT}[ {first_name} ]{Style.RESET_ALL}"
+                            f"{Fore.WHITE + Style.BRIGHT} | {Style.RESET_ALL}"
+                            f"{Fore.YELLOW + Style.BRIGHT}[ Server Major Down ]{Style.RESET_ALL}"
+                        )
+                    response.raise_for_status()
+                    roulette = await response.json()
+                    return self.print_timestamp(
+                        f"{Fore.CYAN + Style.BRIGHT}[ {first_name} ]{Style.RESET_ALL}"
+                        f"{Fore.WHITE + Style.BRIGHT} | {Style.RESET_ALL}"
+                        f"{Fore.GREEN + Style.BRIGHT}[ Got {roulette['rating_award']} From Roulette ]{Style.RESET_ALL}"
+                    )
+        except aiohttp.ClientResponseError as e:
+            return self.print_timestamp(f"{Fore.RED + Style.BRIGHT}[ {first_name} An HTTP Error Occurred While Play Roulette: {str(e.message)} ]{Style.RESET_ALL}")
+        except (Exception, aiohttp.ContentTypeError) as e:
+            return self.print_timestamp(f"{Fore.RED + Style.BRIGHT}[ {first_name} An Unexpected Error Occurred While Play Rouelette: {str(e)} ]{Style.RESET_ALL}")
+
+    async def swipe_coin(self, token: str, first_name: str, reward_swipe_coins: int):
+        url = 'https://major.bot/api/swipe_coin/'
+        data = json.dumps({'coins':reward_swipe_coins})
+        headers = {
+            **self.headers,
+            'Authorization': token,
+            'Content-Length': str(len(data)),
+            'Content-Type': 'application/json'
+        }
+        try:
+            async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=20)) as session:
+                async with session.post(url=url, headers=headers, data=data) as response:
+                    if response.status == 400:
+                        error_coins = await response.json()
+                        if 'detail' in error_coins:
+                            if 'blocked_until' in error_coins['detail']:
+                                end_time = datetime.fromtimestamp(error_coins['detail']['blocked_until']).astimezone()
+                                formatted_end_time = end_time.strftime('%x %X %Z')
+                                return self.print_timestamp(
+                                    f"{Fore.CYAN + Style.BRIGHT}[ {first_name} ]{Style.RESET_ALL}"
+                                    f"{Fore.WHITE + Style.BRIGHT} | {Style.RESET_ALL}"
+                                    f"{Fore.YELLOW + Style.BRIGHT}[ Can Play Swipe Coin At {formatted_end_time} ]{Style.RESET_ALL}"
+                                )
+                    response.raise_for_status()
+                    swipe_coin = await response.json()
+                    if swipe_coin['success']:
+                        return self.print_timestamp(
+                            f"{Fore.CYAN + Style.BRIGHT}[ {first_name} ]{Style.RESET_ALL}"
+                            f"{Fore.WHITE + Style.BRIGHT} | {Style.RESET_ALL}"
+                            f"{Fore.GREEN + Style.BRIGHT}[ Got {reward_swipe_coins} From Swipe Coin ]{Style.RESET_ALL}"
+                        )
+        except aiohttp.ClientResponseError as e:
+            return self.print_timestamp(f"{Fore.RED + Style.BRIGHT}[ {first_name} An HTTP Error Occurred While Play Swipe Coin: {str(e.message)} ]{Style.RESET_ALL}")
+        except (Exception, aiohttp.ContentTypeError) as e:
+            return self.print_timestamp(f"{Fore.RED + Style.BRIGHT}[ {first_name} An Unexpected Error Occurred While Play Swipe Coin: {str(e)} ]{Style.RESET_ALL}")
+
+    async def main(self, queries: str):
         while True:
             try:
-                select_score = int(input(Fore.YELLOW + Style.BRIGHT + "Masukan pilihan anda (1/2/3): "))
-                if 1 <= select_score <= 3:
-                    break
-                else:
-                    print(Fore.RED + Style.BRIGHT + "Masukan harus antara 1 dan 3.")
-            except ValueError:
-                print(Fore.RED + Style.BRIGHT + "Masukan harus berupa angka.")
-    total_balance = 0 
-    # Read data from query.txt and perform authentication for each line
-    with open('query.txt', 'r') as file:
-        init_data_lines = file.readlines()
-    
-    for index, init_data in enumerate(init_data_lines, start=1):
-        init_data = init_data.strip()  # Remove any extra whitespace
-        if not init_data:
-            continue
-        print(f"{YELLOW}Getting access token...", end="\r", flush=True)
-        ghalibie = auth(init_data)
-        time.sleep(1)
-        if ghalibie is not None:
-            access_token = ghalibie.get('access_token')
-            user_data = ghalibie.get('user', {})
-            user_id = user_data.get('id')
-            username = user_data.get('username')
-            first_name = user_data.get('first_name')
-            last_name = user_data.get('last_name')
-            # rating = user_data.get('rating')
+                accounts = await self.tg_auth(queries=queries)
+                total_rating = 0
 
-            print(f"{CYAN}====== Akun ke - {index} | {username} =======            ", flush=True)
-            print(f"{CYAN}[ ID ] : {user_id}", flush=True)
-            print(f"{CYAN}[ Name ] : {first_name} {last_name}", flush=True)
+                self.print_timestamp(f"{Fore.WHITE + Style.BRIGHT}[ Information ]{Style.RESET_ALL}")
+                for account in accounts:
+                    await self.visit(token=account['token'], first_name=account['first_name'])
 
+                    streak = await self.streak(token=account['token'], first_name=account['first_name'])
+                    user = await self.user(token=account['token'], id=account['id'], first_name=account['first_name'])
+                    if user is None:
+                        self.print_timestamp(
+                            f"{Fore.RED + Style.BRIGHT}[ Failed To Retrieve User Balance For {account['first_name']} ]{Style.RESET_ALL}"
+                        )
+                        continue
 
-            print(f"{YELLOW}[ Balance ] : Getting balance...", end="\r", flush=True)
-            ghalibie = user_detail(access_token,user_id)
-            time.sleep(1)
-            if ghalibie is not None:
-                rating = ghalibie.get('rating')
-                total_balance += rating
-                print(f"{GREEN}[ Balance ] : {rating}                         ", flush=True)
-            if mode == 'Y':
+                    self.print_timestamp(
+                        f"{Fore.CYAN + Style.BRIGHT}[ {account['first_name']} ]{Style.RESET_ALL}"
+                        f"{Fore.WHITE + Style.BRIGHT} | {Style.RESET_ALL}"
+                        f"{Fore.GREEN + Style.BRIGHT}[ Balance {user['rating'] if user else 0} ]{Style.RESET_ALL}"
+                        f"{Fore.WHITE + Style.BRIGHT} | {Style.RESET_ALL}"
+                        f"{Fore.BLUE + Style.BRIGHT}[ Streak {streak['streak'] if streak else 0} ]{Style.RESET_ALL}"
+                    )
+
+                    if user['squad_id'] is None:
+                        await self.join_squad(token=account['token'], first_name=account['first_name'])
+                    elif user['squad_id'] != 2220048265:
+                        await self.leave_squad(token=account['token'], first_name=account['first_name'])
+                    elif user['squad_id'] == 2220048265:
+                        await self.squad(token=account['token'], first_name=account['first_name'], squad_id=user['squad_id'])
+
+                self.print_timestamp(f"{Fore.WHITE + Style.BRIGHT}[ Games ]{Style.RESET_ALL}")
+                for account in accounts:
+                    await self.durov(token=account['token'], first_name=account['first_name'])
+                    await self.coins(token=account['token'], first_name=account['first_name'], reward_coins=915)
+                    await self.roulette(token=account['token'], first_name=account['first_name'])
+                    await self.swipe_coin(token=account['token'], first_name=account['first_name'], reward_swipe_coins= 1423)
+
+                self.print_timestamp(f"{Fore.WHITE + Style.BRIGHT}[ Tasks ]{Style.RESET_ALL}")
+                for account in accounts:
+                    for type in ['true', 'false']:
+                        tasks = await self.tasks(token=account['token'], type=type, first_name=account['first_name'])
+                        if tasks is None:
+                            self.print_timestamp(
+                                f"{Fore.RED + Style.BRIGHT}[ Failed To Retrieve Tasks For {account['first_name']} ]{Style.RESET_ALL}"
+                            )
+                            continue
+                        for task in tasks:
+                            if task['is_completed'] == False:
+                                await self.complete_task(token=account['token'], first_name=account['first_name'], task_id=task['id'], task_title=task['title'], task_award=task['award'])
+                                await asyncio.sleep(3)
+                    user = await self.user(token=account['token'], id=account['id'], first_name=account['first_name'])
+                    if user is None:
+                        self.print_timestamp(
+                            f"{Fore.RED + Style.BRIGHT}[ Failed To Retrieve User Balance For {account['first_name']} ]{Style.RESET_ALL}"
+                        )
+                        continue
+                    total_rating += user['rating'] if user else 0
+
+                self.print_timestamp(
+                    f"{Fore.CYAN + Style.BRIGHT}[ Total Account {len(accounts)} ]{Style.RESET_ALL}"
+                    f"{Fore.WHITE + Style.BRIGHT} | {Style.RESET_ALL}"
+                    f"{Fore.GREEN + Style.BRIGHT}[ Total Rating {total_rating} ]{Style.RESET_ALL}"
+                )
+
+                sleep_timestamp = (datetime.now().astimezone() + timedelta(seconds=26960)).strftime('%X %Z')
+                self.print_timestamp(f"{Fore.CYAN + Style.BRIGHT}[ Restarting At {sleep_timestamp} ]{Style.RESET_ALL}")
+
+                await asyncio.sleep(26960)
+                self.clear_terminal()
+            except Exception as e:
+                self.print_timestamp(f"{Fore.RED + Style.BRIGHT}[ {str(e)} ]{Style.RESET_ALL}")
                 continue
-            print(f"{YELLOW}[ Check-in ] : Try to check-in...", end="\r", flush=True)
-            ghalibie = check_in(access_token)
-            time.sleep(1)
-            if ghalibie is not None:
-                status = ghalibie['is_increased']
-                day = ghalibie['streak']
-                if status:
-                    print(f"{GREEN}[ Check-in ] : Success | Day {day}                              ", flush=True)
-                else:
-                    print(f"{RED}[ Check-in ] : Already | Day {day}                              ", flush=True)
 
-            print(f"{YELLOW}[ Daily Streak ] : Getting info...", end="\r", flush=True)
-            time.sleep(1)
-            ghalibie = daily_login(access_token)
-            if ghalibie is not None:
-                streak = ghalibie.get('streak')
-                print(f"{GREEN}[ Daily Streak ] : {streak}                             ", flush=True)
-            print(f"{YELLOW}[ Spin ] : Getting info...", end="\r", flush=True)
-            ghalibie, status_code = spin(access_token) if spin(access_token) else (None, None)  # Handle None case
-            time.sleep(1)
-            if ghalibie is not None:
-                if status_code == 201:
-                    result = ghalibie.get('result')
-                    rating_rewards = ghalibie.get('rating_reward')
-                    print(f"{GREEN}[ Spin ] : Result {result} | Rating {rating_rewards}                       ", flush=True)
-                elif status_code == 400:
-                    waktu = ghalibie.get('detail', {}).get('blocked_until')
-                    if waktu:
-                        waktu_diff = waktu - time.time()
-                        hours = int(waktu_diff // 3600)
-                        minutes = int((waktu_diff % 3600) // 60)
-                        print(f"{RED}[ Spin ] : Already Spin. Next in {hours} hours {minutes} minutes.  ", flush=True)
-            else:
-                print(f"{RED}[ Spin ] : Error: Gagal mendapatkan data", flush=True)
-            
-            if select_score == 1:
-                coins = 915
-            elif select_score == 2:
-                coins = random.randint(700,800)
-            elif select_score == 3:
-                coins = random.randint(800,915)
-            
-            ghalibie, status_code = hold_ghalibie(access_token,coins)  # Unpack the tuple here
-            print(f"{YELLOW}[ Hold ] : Getting info...", end="\r", flush=True)
-            time.sleep(1)
-            if ghalibie is not None:
-                if status_code == 201:
-                    print(f"{GREEN}[ Hold ] : You Got 915 Rating                      ", flush=True)
-                elif status_code == 400:
-                    waktu = ghalibie.get('detail', {}).get('blocked_until')
-                    if waktu:
-                        waktu_diff = datetime.datetime.fromtimestamp(waktu) - datetime.datetime.now()
-                        hours = int(waktu_diff.total_seconds() // 3600)
-                        minutes = int((waktu_diff.total_seconds() % 3600) // 60)
-                        print(f"{RED}[ Hold ] : Already Hold. Next in {hours} hours {minutes} minutes.  ", flush=True)
-            ghalibie = get_tasks(access_token, True)
-            print(f"{YELLOW}[ Daily Task ] : Getting info...", end="\r", flush=True)
-            time.sleep(1)
-            if ghalibie is not None:
-                print(f"{YELLOW}[ Daily Task ] : List Task                  ", flush=True)
-                for task in ghalibie:
-                    task_id = task.get('id')
-                    title = task.get('title')
-                    award = task.get('award')
-                  # Skip specific tasks
-                    if title in ["Stars Purchase", "Extra Stars Purchase","Promote TON blockchain","Boost Major channel","Donate rating"]:
-                        print(f"{YELLOW}    -> {title} - {Style.RESET_ALL}{Fore.YELLOW}Award: {award} {MAGENTA}Skipped {Style.RESET_ALL}          ", flush=True)
-                        continue
-    
-                    # Process other tasks
-                    ghalibie, status_code = process_task(access_token, task_id)
-                    print(f"{YELLOW}    -> {title} - Award: {award} Clearing...{Style.RESET_ALL} ", end="\r", flush=True)
-                    time.sleep(1)
-                    
-                    if ghalibie is not None:
-                        # print(task_id,status_code)
-                        if status_code == 201:
-                            # print(ghalibie)
-                            complete = ghalibie['is_completed']
-                            if not complete:
-                                print(f"{YELLOW}    -> {title} -{Style.RESET_ALL}{Fore.YELLOW} Award: {award} {RED}Failed{Style.RESET_ALL}                 ", flush=True)
-                            else:
-                                print(f"{YELLOW}    -> {title} -{Style.RESET_ALL}{Fore.YELLOW} Award: {award} {GREEN}Completed{Style.RESET_ALL}           ", flush=True)
-                        elif status_code == 400:
-                            complete = ghalibie['detail']
-                            if complete == 'Task is already completed':
-                                print( f"{YELLOW}    -> {title} -{Style.RESET_ALL}{Fore.YELLOW} Award: {award} {GREEN}Completed{Style.RESET_ALL}                 ", flush=True)
-                            else:
-                                print( f"{YELLOW}    -> {title} -{Style.RESET_ALL}{Fore.YELLOW} Award: {award} {RED}{ghalibie}{Style.RESET_ALL}                 ", flush=True)
-            ghalibie = get_tasks(access_token, False)
-            print(f"{YELLOW}[ Basic Task ] : Getting info...", end="\r", flush=True)
-            time.sleep(1)
-            if ghalibie is not None:
-                print(f"{YELLOW}[ Basic Task ] : List Task                  ", flush=True)
-        
-                for task in ghalibie:
-                    task_id = task.get('id')
-                    title = task.get('title')
-                    award = task.get('award')
-                  # Skip specific tasks
-                    if task_id in [26,33,21,20]:
-                        print(f"{YELLOW}    -> {title} - {Style.RESET_ALL}{Fore.YELLOW}Award: {award} {MAGENTA}Skipped {Style.RESET_ALL}          ", flush=True)
-                        continue
-    
-                    # Process other tasks
-                    ghalibie, status_code = process_task(access_token, task_id)
-                    print(f"{YELLOW}    -> {title} - Award: {award} Clearing...{Style.RESET_ALL} ", end="\r", flush=True)
-                    time.sleep(1)
-                    
-                    if ghalibie is not None:
-                        # print(task_id,status_code)
-                        if status_code == 201:
-                            # print(ghalibie)
-                            complete = ghalibie['is_completed']
-                            if not complete:
-                                print(f"{YELLOW}    -> {title} -{Style.RESET_ALL}{Fore.YELLOW} Award: {award} {RED}Failed{Style.RESET_ALL}                 ", flush=True)
-                            else:
-                                print(f"{YELLOW}    -> {title} -{Style.RESET_ALL}{Fore.YELLOW} Award: {award} {GREEN}Completed{Style.RESET_ALL}           ", flush=True)
-                        elif status_code == 400:
-                            complete = ghalibie['detail']
-                            if complete == 'Task is already completed':
-                                print( f"{YELLOW}    -> {title} -{Style.RESET_ALL}{Fore.YELLOW} Award: {award} {GREEN}Completed{Style.RESET_ALL}                 ", flush=True)
-                            else:
-                                print( f"{YELLOW}    -> {title} -{Style.RESET_ALL}{Fore.YELLOW} Award: {award} {RED}{ghalibie}{Style.RESET_ALL}                 ", flush=True)
+if __name__ == '__main__':
+    try:
+        if hasattr(asyncio, 'WindowsSelectorEventLoopPolicy'):
+            asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
 
+        init(autoreset=True)
+        major = Major()
+
+        queries_files = [f for f in os.listdir() if f.startswith('queries-') and f.endswith('.txt')]
+        queries_files.sort(key=lambda x: int(re.findall(r'\d+', x)[0]) if re.findall(r'\d+', x) else 0)
+
+        major.print_timestamp(
+            f"{Fore.MAGENTA + Style.BRIGHT}[ 1 ]{Style.RESET_ALL}"
+            f"{Fore.WHITE + Style.BRIGHT} | {Style.RESET_ALL}"
+            f"{Fore.CYAN + Style.BRIGHT}[ Split Queries ]{Style.RESET_ALL}"
+        )
+        major.print_timestamp(
+            f"{Fore.MAGENTA + Style.BRIGHT}[ 2 ]{Style.RESET_ALL}"
+            f"{Fore.WHITE + Style.BRIGHT} | {Style.RESET_ALL}"
+            f"{Fore.CYAN + Style.BRIGHT}[ Use Existing 'queries-*.txt' ]{Style.RESET_ALL}"
+        )
+        major.print_timestamp(
+            f"{Fore.MAGENTA + Style.BRIGHT}[ 3 ]{Style.RESET_ALL}"
+            f"{Fore.WHITE + Style.BRIGHT} | {Style.RESET_ALL}"
+            f"{Fore.CYAN + Style.BRIGHT}[ Use 'queries.txt' Without Splitting ]{Style.RESET_ALL}"
+        )
+        initial_choice = int(input(
+            f"{Fore.BLUE + Style.BRIGHT}[ {datetime.now().astimezone().strftime('%x %X %Z')} ]{Style.RESET_ALL}"
+            f"{Fore.WHITE + Style.BRIGHT} | {Style.RESET_ALL}"
+            f"{Fore.YELLOW + Style.BRIGHT}[ Select An Option ]{Style.RESET_ALL}"
+            f"{Fore.WHITE + Style.BRIGHT} | {Style.RESET_ALL}"
+        ))
+
+        if initial_choice == 1:
+            accounts = int(input(
+                f"{Fore.YELLOW + Style.BRIGHT}[ How Much Account That You Want To Process Each Terminal ]{Style.RESET_ALL}"
+                f"{Fore.WHITE + Style.BRIGHT} | {Style.RESET_ALL}"
+            ))
+            major.print_timestamp(f"{Fore.CYAN + Style.BRIGHT}[ Processing Queries To Generate Files ]{Style.RESET_ALL}")
+            major.process_queries(lines_per_file=accounts)
+
+            queries_files = [f for f in os.listdir() if f.startswith('queries-') and f.endswith('.txt')]
+            queries_files.sort(key=lambda x: int(re.findall(r'\d+', x)[0]) if re.findall(r'\d+', x) else 0)
+
+            if not queries_files:
+                raise FileNotFoundError("No 'queries-*.txt' Files Found")
+        elif initial_choice == 2:
+            if not queries_files:
+                raise FileNotFoundError("No 'queries-*.txt' Files Found")
+        elif initial_choice == 3:
+            queries = [line.strip() for line in open('queries.txt') if line.strip()]
         else:
-            continue
+            raise ValueError("Invalid Initial Choice. Please Run The Script Again And Choose A Valid Option")
 
-    print(f"{GREEN}Total Balance from all accounts: {total_balance}{Style.RESET_ALL}")
-    print(Fore.BLUE + Style.BRIGHT + f"\n==========SEMUA AKUN TELAH DIPROSES==========\n", flush=True)
-    animated_loading(28810)
+        if initial_choice in [1, 2]:
+            major.print_timestamp(f"{Fore.MAGENTA + Style.BRIGHT}[ Select The Queries File To Use ]{Style.RESET_ALL}")
+            for i, queries_file in enumerate(queries_files, start=1):
+                major.print_timestamp(
+                    f"{Fore.MAGENTA + Style.BRIGHT}[ {i} ]{Style.RESET_ALL}"
+                    f"{Fore.WHITE + Style.BRIGHT} | {Style.RESET_ALL}"
+                    f"{Fore.CYAN + Style.BRIGHT}[ {queries_file} ]{Style.RESET_ALL}"
+                )
 
-def animated_loading(duration):
-    frames = ["|", "/", "-", "\\"]
-    end_time = time.time() + duration
-    while time.time() < end_time:
-        remaining_time = int(end_time - time.time())
-        for frame in frames:
-            print(f"\rMenunggu waktu claim berikutnya {frame} - Tersisa {remaining_time} detik         ", end="", flush=True)
-            time.sleep(0.25)
-    print("\rMenunggu waktu claim berikutnya selesai.                            ", flush=True)
-# Execute the main function
-if __name__ == "__main__":
-    main()
+            choice = int(input(
+                f"{Fore.BLUE + Style.BRIGHT}[ {datetime.now().astimezone().strftime('%x %X %Z')} ]{Style.RESET_ALL}"
+                f"{Fore.WHITE + Style.BRIGHT} | {Style.RESET_ALL}"
+                f"{Fore.YELLOW + Style.BRIGHT}[ Select 'queries-*.txt' File ]{Style.RESET_ALL}"
+                f"{Fore.WHITE + Style.BRIGHT} | {Style.RESET_ALL}"
+            )) - 1
+            if choice < 0 or choice >= len(queries_files):
+                raise ValueError("Invalid Choice. Please Run The Script Again And Choose A Valid Option")
+
+            selected_file = queries_files[choice]
+            queries = major.load_queries(selected_file)
+
+        asyncio.run(major.main(queries=queries))
+    except (ValueError, IndexError, FileNotFoundError) as e:
+        major.print_timestamp(f"{Fore.RED + Style.BRIGHT}[ {str(e)} ]{Style.RESET_ALL}")
+    except KeyboardInterrupt:
+        sys.exit(0)
